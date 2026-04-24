@@ -1,4 +1,66 @@
 services:
+  gen-model:
+    build:
+      context: .
+      dockerfile: src/api/v1/Dockerfile 
+    volumes:
+      - ./src/gen_model.py:/app/gen_model.py  
+      - ./data:/app/data                      
+      - ./model:/app/model                    
+    command: python gen_model.py
+    profiles:
+      - tools 
+
+  # --- API SERVICES ---
+  # Version 1 de l'API : Configurée pour la haute disponibilité avec 3 répliques
+  api-v1:
+    build:
+      context: .
+      dockerfile: src/api/v1/Dockerfile
+    scale: 3
+#    deploy:
+#      replicas: 3
+    expose:
+      - "8000"
+
+  api-v2:
+    build:
+      context: .
+      dockerfile: src/api/v2/Dockerfile
+    expose:
+      - "8000"
+
+  # --- GATEWAY & NETWORKING (Entry point) ---
+  # Reverse Proxy Nginx : Gère le routage du trafic, le SSL et le load balancing
+  nginx:
+    build:
+      context: deployments/nginx/
+      dockerfile: Dockerfile
+    container_name: nginx_rev_proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployments/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deployments/nginx/certs:/etc/nginx/certs:ro
+      - ./deployments/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - api-v1
+      - api-v2
+
+  # --- OBSERVABILITY STACK (Monitoring & Metrics) ---
+  # Expose les métriques Nginx au format Prometheus
+  nginx_exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: nginx_exporter
+    ports:
+      - "9113:9113"
+    depends_on:
+      - nginx
+    environment:
+      SCRAPE_URI: https://nginx/nginx_status
+
+  # Serveur prometheus pour collecter et stocker les métriques
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus_server
@@ -10,6 +72,7 @@ services:
     depends_on:
       - nginx
 
+  # Interface de visualisation pour créer des dashboards de monitoring
   grafana:
     image: grafana/grafana:latest
     container_name: grafana_dashboard
@@ -23,6 +86,7 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
 
+# --- STORAGE (Persistent data) ---
 volumes:
   prometheus_data:
   grafana_data:
