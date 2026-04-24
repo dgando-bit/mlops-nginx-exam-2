@@ -1,6 +1,7 @@
 # MLOps Nginx Exam
 
 ## Structure du projet
+```sh
 . 
 ├── Makefile
 ├── README.md
@@ -31,7 +32,7 @@
 │   └── gen_model.py
 └── tests
     └── run_tests.sh
-
+```
 ## Démarrage
 
 ### 1. Lancer le projet
